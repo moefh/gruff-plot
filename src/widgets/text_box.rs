@@ -1,11 +1,13 @@
 use raylib::prelude::*;
 use unicode_segmentation::GraphemeCursor;
 
+use super::WidgetBehavior;
+
 fn is_key_pressed(d: &RaylibDrawHandle<'_>, key: KeyboardKey) -> bool {
     d.is_key_pressed(key) || d.is_key_pressed_repeat(key)
 }
 
-pub struct GruffTextBoxWidget {
+pub struct TextBoxWidget {
     pub rect: Rectangle,
     pub editable: bool,
     pub changed: bool,
@@ -13,7 +15,13 @@ pub struct GruffTextBoxWidget {
     cursor_pos: usize,
 }
 
-impl GruffTextBoxWidget {
+impl WidgetBehavior for TextBoxWidget {
+    fn want_focus(&self) -> bool {
+        true
+    }
+}
+
+impl TextBoxWidget {
     pub const SPACING: f32 = 1.0;
     pub const BORDER: f32 = 2.0;
     pub const CURSOR_WIDTH: f32 = 3.0;
@@ -23,7 +31,7 @@ impl GruffTextBoxWidget {
     pub const PAD_VERTICAL: f32 = Self::PAD_TOP + Self::PAD_BOTTOM;
 
     pub fn new(rect: Rectangle) -> Self {
-        GruffTextBoxWidget {
+        TextBoxWidget {
             rect,
             text: String::new(),
             editable: true,
@@ -75,9 +83,9 @@ impl GruffTextBoxWidget {
         &self.text
     }
 
-    pub fn set_text(&mut self, text: &str) {
-        self.text.replace_range(.., text);
-        self.cursor_pos = text.len();
+    pub fn set_text(&mut self, text: impl AsRef<str>) {
+        self.text.replace_range(.., text.as_ref());
+        self.cursor_pos = self.text.len();
         self.fix_cursor_pos();
         self.changed = true;
     }
@@ -126,7 +134,11 @@ impl GruffTextBoxWidget {
     pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
         if self.rect.width.floor() <= 0.0 || self.rect.height.floor() < 0.0 { return; }
 
-        d.draw_rectangle_rec(self.rect, Color::new(224, 224, 224, 255));
+        if focused {
+            d.draw_rectangle_rec(self.rect, Color::new(224, 224, 224, 255));
+        } else {
+            d.draw_rectangle_rec(self.rect, Color::WHITE);
+        }
         if let Some(highlight_color) = highlight {
             d.draw_rectangle_lines_ex(self.rect, Self::BORDER, highlight_color);
         } else {
