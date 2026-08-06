@@ -1,12 +1,10 @@
 mod text_box;
 mod plot;
 
+use raylib::prelude::*;
+
 pub use text_box::*;
 pub use plot::*;
-
-pub trait WidgetBehavior {
-    fn want_focus(&self) -> bool { false }
-}
 
 pub enum Widget {
     TextBox(TextBoxWidget),
@@ -14,10 +12,17 @@ pub enum Widget {
 }
 
 impl Widget {
-    pub fn behavior(&self) -> &dyn WidgetBehavior {
+    pub fn want_focus(&self) -> bool {
         match self {
-            Widget::TextBox(w) => { w }
-            Widget::Plot(w) => { w }
+            Widget::TextBox(w) => { w.want_focus() }
+            Widget::Plot(w) => { w.want_focus() }
+        }
+    }
+
+    pub fn get_rect(&self) -> Rectangle {
+        match self {
+            Widget::TextBox(w) => { w.rect }
+            Widget::Plot(w) => { w.rect }
         }
     }
 }
@@ -40,6 +45,10 @@ impl WidgetBag {
     }
 
     pub fn advance_focus(&mut self, direction: i32) {
+        if self.widgets.is_empty() {
+            return;
+        }
+
         let start = self.focus;
         loop {
             if direction >= 0 {
@@ -47,7 +56,7 @@ impl WidgetBag {
             } else {
                 self.focus = (self.focus + self.widgets.len() - 1) % self.widgets.len();
             }
-            if self.focus == start || self.widgets[self.focus].behavior().want_focus() {
+            if self.focus == start || self.widgets[self.focus].want_focus() {
                 break;
             }
         }
@@ -85,6 +94,25 @@ impl WidgetBag {
         for widget in self.widgets.iter_mut() {
             if let Widget::TextBox(text) = widget {
                 text.changed = false;
+            }
+        }
+    }
+
+    pub fn handle_keyboard(&mut self, rl: &RaylibHandle) {
+        if rl.is_key_pressed(KeyboardKey::KEY_TAB) {
+            let direction = if rl.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) || rl.is_key_down(KeyboardKey::KEY_RIGHT_SHIFT) { -1 } else { 1 };
+            self.advance_focus(direction);
+        }
+    }
+
+    pub fn handle_mouse(&mut self, rl: &RaylibHandle) {
+        if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+            let mouse_pos = Vector2::new(rl.get_mouse_x() as f32, rl.get_mouse_y() as f32);
+            for (index, widget) in self.widgets.iter_mut().enumerate() {
+                if widget.want_focus() && widget.get_rect().check_collision_point_rec(mouse_pos) {
+                    self.focus = index;
+                    break;
+                }
             }
         }
     }

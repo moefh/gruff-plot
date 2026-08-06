@@ -61,23 +61,28 @@ fn resize_widgets(widgets: &mut WidgetBag, window_width: i32, window_height: i32
 }
 
 pub fn update_graph_bounds(widgets: &mut WidgetBag) {
-    let min_x = widgets.get_text_box(WIDGET_MIN_X).and_then(|text| text.get_text().parse::<f64>().ok());
-    let min_y = widgets.get_text_box(WIDGET_MIN_Y).and_then(|text| text.get_text().parse::<f64>().ok());
-    let max_x = widgets.get_text_box(WIDGET_MAX_X).and_then(|text| text.get_text().parse::<f64>().ok());
-    let max_y = widgets.get_text_box(WIDGET_MAX_Y).and_then(|text| text.get_text().parse::<f64>().ok());
+    let min_x = widgets.get_text_box(WIDGET_MIN_X).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
+    let min_y = widgets.get_text_box(WIDGET_MIN_Y).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
+    let max_x = widgets.get_text_box(WIDGET_MAX_X).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
+    let max_y = widgets.get_text_box(WIDGET_MAX_Y).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
 
     let bounds = if let Some(plot) = widgets.get_plot_mut(WIDGET_PLOT) {
-        if let Some(min_x) = min_x && plot.x_left != min_x { plot.x_left = min_x; }
-        if let Some(min_y) = min_y && plot.y_bottom != min_y { plot.y_bottom = min_y; }
-        if let Some(max_x) = max_x && plot.x_right != max_x { plot.x_right = max_x; }
-        if let Some(max_y) = max_y && plot.y_top != max_y { plot.y_top = max_y; }
-        Some((plot.x_left, plot.y_bottom, plot.x_right, plot.y_top))
+        let mut changed = false;
+        if plot.min_x != min_x { plot.min_x = min_x; changed = true; }
+        if plot.min_y != min_y { plot.min_y = min_y; changed = true; }
+        if plot.max_x != max_x { plot.max_x = max_x; changed = true; }
+        if plot.max_y != max_y { plot.max_y = max_y; changed = true; }
+        if changed {
+            Some((plot.min_x, plot.min_y, plot.max_x, plot.max_y))
+        } else {
+            None
+        }
     } else {
         None
     };
 
-    let focus = widgets.focus;
     if let Some((min_x, min_y, max_x, max_y)) = bounds {
+        let focus = widgets.focus;
         if focus != 1 && let Some(text) = widgets.get_text_box_mut(WIDGET_MIN_X) { text.set_text(format!("{}", min_x)); text.changed = false; }
         if focus != 2 && let Some(text) = widgets.get_text_box_mut(WIDGET_MIN_Y) { text.set_text(format!("{}", min_y)); text.changed = false; }
         if focus != 3 && let Some(text) = widgets.get_text_box_mut(WIDGET_MAX_X) { text.set_text(format!("{}", max_x)); text.changed = false; }
@@ -112,10 +117,10 @@ pub fn main() {
     let text_box_height = FONT_SIZE as f32 + widgets::TextBoxWidget::PAD_VERTICAL;
     let mut widgets = WidgetBag::new();
     widgets.add_text_box(TextBoxWidget::new(Rectangle::new(WINDOW_MARGIN, WINDOW_MARGIN, 300.0, text_box_height)).with_text("sin(x)"));
-    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("-10.0"));
-    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("-10.0"));
-    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("10.0"));
-    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("10.0"));
+    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("-5.0"));
+    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("-3.0"));
+    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("5.0"));
+    widgets.add_text_box(TextBoxWidget::new(Rectangle::new(0.0, WINDOW_MARGIN, 100.0, text_box_height)).with_text("3.0"));
     widgets.add_plot(PlotWidget::new(Rectangle::new(0.0, text_box_height + 2.0 * WINDOW_MARGIN, 300.0, 300.0)));
 
     while ! rl.window_should_close() {
@@ -126,10 +131,8 @@ pub fn main() {
 
         // resize, change focus
         resize_widgets(&mut widgets, window_width, window_height);
-        if d.is_key_pressed(KeyboardKey::KEY_TAB) {
-            let direction = if d.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) || d.is_key_down(KeyboardKey::KEY_RIGHT_SHIFT) { -1 } else { 1 };
-            widgets.advance_focus(direction);
-        }
+        widgets.handle_keyboard(&d);
+        widgets.handle_mouse(&d);
 
         // draw
         let focus = widgets.focus;

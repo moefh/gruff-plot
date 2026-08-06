@@ -1,8 +1,6 @@
 use raylib::prelude::*;
 use unicode_segmentation::GraphemeCursor;
 
-use super::WidgetBehavior;
-
 fn is_key_pressed(d: &RaylibDrawHandle<'_>, key: KeyboardKey) -> bool {
     d.is_key_pressed(key) || d.is_key_pressed_repeat(key)
 }
@@ -13,12 +11,6 @@ pub struct TextBoxWidget {
     pub changed: bool,
     text: String,
     cursor_pos: usize,
-}
-
-impl WidgetBehavior for TextBoxWidget {
-    fn want_focus(&self) -> bool {
-        true
-    }
 }
 
 impl TextBoxWidget {
@@ -49,6 +41,10 @@ impl TextBoxWidget {
     pub fn read_only(mut self) -> Self {
         self.editable = false;
         self
+    }
+
+    pub fn want_focus(&self) -> bool {
+        true
     }
 
     fn try_fix_cursor_pos(&mut self) -> Option<usize> {
