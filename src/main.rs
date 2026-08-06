@@ -10,6 +10,13 @@ const GRAPH_WIDTH: u32 = 1200;
 const GRAPH_HEIGHT: u32 = 800;
 const WINDOW_MARGIN: f32 = 12.0;
 
+const WIDGET_FUNC: usize = 0;
+const WIDGET_MIN_X: usize = 1;
+const WIDGET_MIN_Y: usize = 2;
+const WIDGET_MAX_X: usize = 3;
+const WIDGET_MAX_Y: usize = 4;
+const WIDGET_PLOT: usize = 5;
+
 use widgets::{
     WidgetBag,
     TextBoxWidget,
@@ -30,14 +37,14 @@ fn resize_widgets(widgets: &mut WidgetBag, window_width: i32, window_height: i32
     let mut y = 0.0;
 
     // function text box
-    if let Some(func) = widgets.get_text_box_mut(0) {
+    if let Some(func) = widgets.get_text_box_mut(WIDGET_FUNC) {
         func.rect.width = (0.5 * window_width).floor() - 2.0 * WINDOW_MARGIN;
         x = func.rect.x + func.rect.width;
         y = func.rect.y + func.rect.height;
     }
 
     // bounds check boxes
-    for index in 1..5 {
+    for index in [WIDGET_MIN_X, WIDGET_MIN_Y, WIDGET_MAX_X, WIDGET_MAX_Y] {
         if let Some(text) = widgets.get_text_box_mut(index) {
             text.rect.x = x + WINDOW_MARGIN;
             x = text.rect.x + text.rect.width;
@@ -45,7 +52,7 @@ fn resize_widgets(widgets: &mut WidgetBag, window_width: i32, window_height: i32
     }
 
     // plot
-    if let Some(plot) = widgets.get_plot_mut(5) {
+    if let Some(plot) = widgets.get_plot_mut(WIDGET_PLOT) {
         plot.rect.width = (window_width - 2.0 * WINDOW_MARGIN).min(GRAPH_WIDTH as f32);
         plot.rect.height = (window_height - y - 2.0 * WINDOW_MARGIN).min(GRAPH_HEIGHT as f32);
         plot.rect.x = (0.5 * (window_width - plot.rect.width)).floor();
@@ -54,12 +61,12 @@ fn resize_widgets(widgets: &mut WidgetBag, window_width: i32, window_height: i32
 }
 
 pub fn update_graph_bounds(widgets: &mut WidgetBag) {
-    let min_x = widgets.get_text_box(1).and_then(|text| text.get_text().parse::<f64>().ok());
-    let min_y = widgets.get_text_box(2).and_then(|text| text.get_text().parse::<f64>().ok());
-    let max_x = widgets.get_text_box(3).and_then(|text| text.get_text().parse::<f64>().ok());
-    let max_y = widgets.get_text_box(4).and_then(|text| text.get_text().parse::<f64>().ok());
+    let min_x = widgets.get_text_box(WIDGET_MIN_X).and_then(|text| text.get_text().parse::<f64>().ok());
+    let min_y = widgets.get_text_box(WIDGET_MIN_Y).and_then(|text| text.get_text().parse::<f64>().ok());
+    let max_x = widgets.get_text_box(WIDGET_MAX_X).and_then(|text| text.get_text().parse::<f64>().ok());
+    let max_y = widgets.get_text_box(WIDGET_MAX_Y).and_then(|text| text.get_text().parse::<f64>().ok());
 
-    let bounds = if let Some(plot) = widgets.get_plot_mut(5) {
+    let bounds = if let Some(plot) = widgets.get_plot_mut(WIDGET_PLOT) {
         if let Some(min_x) = min_x && plot.x_left != min_x { plot.x_left = min_x; }
         if let Some(min_y) = min_y && plot.y_bottom != min_y { plot.y_bottom = min_y; }
         if let Some(max_x) = max_x && plot.x_right != max_x { plot.x_right = max_x; }
@@ -71,10 +78,10 @@ pub fn update_graph_bounds(widgets: &mut WidgetBag) {
 
     let focus = widgets.focus;
     if let Some((min_x, min_y, max_x, max_y)) = bounds {
-        if focus != 1 && let Some(text) = widgets.get_text_box_mut(1) { text.set_text(format!("{}", min_x)); text.changed = false; }
-        if focus != 2 && let Some(text) = widgets.get_text_box_mut(2) { text.set_text(format!("{}", min_y)); text.changed = false; }
-        if focus != 3 && let Some(text) = widgets.get_text_box_mut(3) { text.set_text(format!("{}", max_x)); text.changed = false; }
-        if focus != 4 && let Some(text) = widgets.get_text_box_mut(4) { text.set_text(format!("{}", max_y)); text.changed = false; }
+        if focus != 1 && let Some(text) = widgets.get_text_box_mut(WIDGET_MIN_X) { text.set_text(format!("{}", min_x)); text.changed = false; }
+        if focus != 2 && let Some(text) = widgets.get_text_box_mut(WIDGET_MIN_Y) { text.set_text(format!("{}", min_y)); text.changed = false; }
+        if focus != 3 && let Some(text) = widgets.get_text_box_mut(WIDGET_MAX_X) { text.set_text(format!("{}", max_x)); text.changed = false; }
+        if focus != 4 && let Some(text) = widgets.get_text_box_mut(WIDGET_MAX_Y) { text.set_text(format!("{}", max_y)); text.changed = false; }
     }
 }
 
@@ -117,6 +124,7 @@ pub fn main() {
         let mut d = rl.begin_drawing(&thread);
         d.clear_background(Color::WHITE);
 
+        // resize, change focus
         resize_widgets(&mut widgets, window_width, window_height);
         if d.is_key_pressed(KeyboardKey::KEY_TAB) {
             let direction = if d.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) || d.is_key_down(KeyboardKey::KEY_RIGHT_SHIFT) { -1 } else { 1 };
@@ -125,18 +133,19 @@ pub fn main() {
 
         // draw
         let focus = widgets.focus;
-        if let Some(func) = widgets.get_text_box_mut(0) {
+        if let Some(func) = widgets.get_text_box_mut(WIDGET_FUNC) {
             func.draw(&mut d, &font, 24.0, focus == 0, if expr.is_some() { None } else { Some(Color::RED) });
             if func.changed {
                 expr = expr::Expr::parse(func.get_text()).ok();
             }
         }
-        for i in 1..5 {
-            if let Some(text) = widgets.get_text_box_mut(i) {
-                text.draw(&mut d, &font, 24.0, focus == i, None);
+        for index in [WIDGET_MIN_X, WIDGET_MIN_Y, WIDGET_MAX_X, WIDGET_MAX_Y] {
+            if let Some(text) = widgets.get_text_box_mut(index) {
+                text.draw(&mut d, &font, 24.0, focus == index, None);
             }
         }
-        if let Some(plot) = widgets.get_plot_mut(5) {
+        update_graph_bounds(&mut widgets);
+        if let Some(plot) = widgets.get_plot_mut(WIDGET_PLOT) {
             let rect = Rectangle::new(0.0, 0.0, plot.rect.width, plot.rect.height);
             d.draw_texture_mode(&thread, &mut graph_tex, |mut tex| {
                 tex.clear_background(Color::WHITE);
@@ -149,7 +158,6 @@ pub fn main() {
                 Color::WHITE
             );
         }
-        update_graph_bounds(&mut widgets);
 
         // quit
         let control_held = d.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) || d.is_key_down(KeyboardKey::KEY_RIGHT_CONTROL);

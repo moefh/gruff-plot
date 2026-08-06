@@ -16,8 +16,8 @@ pub enum Widget {
 impl Widget {
     pub fn behavior(&self) -> &dyn WidgetBehavior {
         match self {
-            Widget::TextBox(w) => { return w; }
-            Widget::Plot(w) => { return w; }
+            Widget::TextBox(w) => { w }
+            Widget::Plot(w) => { w }
         }
     }
 }
