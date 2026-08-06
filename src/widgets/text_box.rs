@@ -127,9 +127,7 @@ impl TextBoxWidget {
         self.changed = true;
     }
 
-    pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
-        if self.rect.width.floor() <= 0.0 || self.rect.height.floor() < 0.0 { return; }
-
+    fn draw_widget(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
         if focused {
             d.draw_rectangle_rec(self.rect, Color::new(224, 224, 224, 255));
         } else {
@@ -156,5 +154,19 @@ impl TextBoxWidget {
             if is_key_pressed(d, KeyboardKey::KEY_END)       { self.set_cursor_pos(self.get_text().len()); }
             if let Some(ch) = d.get_char_pressed()           { self.insert_char(ch); }
         }
+    }
+
+    pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
+        if self.rect.width.floor() <= 0.0 || self.rect.height.floor() < 0.0 { return; }
+
+        d.draw_scissor_mode(
+            self.rect.x.floor() as i32,
+            self.rect.y.floor() as i32,
+            self.rect.width.floor() as i32,
+            self.rect.height.floor() as i32,
+            |mut d| {
+                self.draw_widget(&mut d, font, font_size, focused, highlight);
+            }
+        );
     }
 }

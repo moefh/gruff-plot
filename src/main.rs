@@ -102,10 +102,6 @@ pub fn main() {
     rl.set_exit_key(None);
     rl.set_window_min_size(900, 600);
 
-    let mut graph_tex = match rl.load_render_texture(&thread, GRAPH_WIDTH, GRAPH_HEIGHT) {
-        Ok(tex) => { tex }
-        Err(e) => { println!("ERROR creating graph texture: {}", e); return; }
-    };
     let font = match rl.load_font_from_memory(&thread, ".ttf", FONT_BYTES, FONT_SIZE, None) {
         Ok(font) => { font }
         Err(e) => { println!("ERROR loading font: {}", e); return; }
@@ -113,6 +109,7 @@ pub fn main() {
 
     let mut eval = expr::eval::ExprEvaluator::new().with_math_funcs().with_math_consts();
     let mut expr = None;
+    let mut invalid_expr = false;
 
     let text_box_height = FONT_SIZE as f32 + widgets::TextBoxWidget::PAD_VERTICAL;
     let mut widgets = WidgetBag::new();
@@ -137,29 +134,24 @@ pub fn main() {
         // draw
         let focus = widgets.focus;
         if let Some(func) = widgets.get_text_box_mut(WIDGET_FUNC) {
-            func.draw(&mut d, &font, 24.0, focus == 0, if expr.is_some() { None } else { Some(Color::RED) });
+            func.draw(&mut d, &font, FONT_SIZE as f32, focus == 0, if invalid_expr { Some(Color::RED) } else { None });
             if func.changed {
-                expr = expr::Expr::parse(func.get_text()).ok();
+                if let Some(new_expr) = expr::Expr::parse(func.get_text()).ok() {
+                    expr = Some(new_expr);
+                    invalid_expr = false;
+                } else {
+                    invalid_expr = true;
+                }
             }
         }
         for index in [WIDGET_MIN_X, WIDGET_MIN_Y, WIDGET_MAX_X, WIDGET_MAX_Y] {
             if let Some(text) = widgets.get_text_box_mut(index) {
-                text.draw(&mut d, &font, 24.0, focus == index, None);
+                text.draw(&mut d, &font, FONT_SIZE as f32, focus == index, None);
             }
         }
         update_graph_bounds(&mut widgets);
         if let Some(plot) = widgets.get_plot_mut(WIDGET_PLOT) {
-            let rect = Rectangle::new(0.0, 0.0, plot.rect.width, plot.rect.height);
-            d.draw_texture_mode(&thread, &mut graph_tex, |mut tex| {
-                tex.clear_background(Color::WHITE);
-                plot.draw(&mut tex, rect, expr.as_ref(), &mut eval);
-            });
-            d.draw_texture_rec(
-                graph_tex.texture(),
-                Rectangle::new(0.0, GRAPH_HEIGHT as f32 - rect.height, rect.width, rect.height),
-                Vector2::new(plot.rect.x, plot.rect.y),
-                Color::WHITE
-            );
+            plot.draw(&mut d, expr.as_ref(), &mut eval);
         }
 
         // quit
