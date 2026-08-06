@@ -61,17 +61,17 @@ fn resize_widgets(widgets: &mut WidgetBag, window_width: i32, window_height: i32
 }
 
 pub fn update_graph_bounds(widgets: &mut WidgetBag) {
-    let min_x = widgets.get_text_box(WIDGET_MIN_X).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
-    let min_y = widgets.get_text_box(WIDGET_MIN_Y).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
-    let max_x = widgets.get_text_box(WIDGET_MAX_X).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
-    let max_y = widgets.get_text_box(WIDGET_MAX_Y).and_then(|text| text.get_text().parse::<f64>().ok()).unwrap_or(0.0);
+    let min_x = widgets.get_text_box(WIDGET_MIN_X).and_then(|text| text.get_text().parse::<f64>().ok());
+    let min_y = widgets.get_text_box(WIDGET_MIN_Y).and_then(|text| text.get_text().parse::<f64>().ok());
+    let max_x = widgets.get_text_box(WIDGET_MAX_X).and_then(|text| text.get_text().parse::<f64>().ok());
+    let max_y = widgets.get_text_box(WIDGET_MAX_Y).and_then(|text| text.get_text().parse::<f64>().ok());
 
     let bounds = if let Some(plot) = widgets.get_plot_mut(WIDGET_PLOT) {
         let mut changed = false;
-        if plot.min_x != min_x { plot.min_x = min_x; changed = true; }
-        if plot.min_y != min_y { plot.min_y = min_y; changed = true; }
-        if plot.max_x != max_x { plot.max_x = max_x; changed = true; }
-        if plot.max_y != max_y { plot.max_y = max_y; changed = true; }
+        if let Some(min_x) = min_x && plot.min_x != min_x { plot.min_x = min_x; changed = true; }
+        if let Some(min_y) = min_y && plot.min_y != min_y { plot.min_y = min_y; changed = true; }
+        if let Some(max_x) = max_x && plot.max_x != max_x { plot.max_x = max_x; changed = true; }
+        if let Some(max_y) = max_y && plot.max_y != max_y { plot.max_y = max_y; changed = true; }
         if changed {
             Some((plot.min_x, plot.min_y, plot.max_x, plot.max_y))
         } else {
