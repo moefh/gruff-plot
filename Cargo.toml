@@ -1,0 +1,8 @@
+[package]
+name = "gruff-plot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+raylib = { version = "6.0.0", features = [ "raygui" ] }
+unicode-segmentation = "1.12"
