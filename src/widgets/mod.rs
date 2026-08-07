@@ -207,6 +207,6 @@ impl MouseHandler {
             return MouseAction::Wheel(delta);
         }
 
-        return MouseAction::None;
+        MouseAction::None
     }
 }

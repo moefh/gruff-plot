@@ -2,6 +2,7 @@ use raylib::prelude::*;
 
 use crate::expr::Expr;
 use crate::expr::eval::ExprEvaluator;
+use crate::data::DataSeries;
 
 use super::{
     MouseHandler,
@@ -30,14 +31,14 @@ impl CoordTransform {
         }
     }
 
-    fn to_window(&self, x: f64, y: f64) -> (f32, f32) {
+    fn graph_to_window(&self, x: f64, y: f64) -> (f32, f32) {
         (
             self.start_x + (x - self.min_x) as f32 * self.scale_x,
             self.start_y + (y - self.min_y) as f32 * self.scale_y
         )
     }
 
-    fn from_window(&self, x: f32, y: f32) -> (f64, f64) {
+    fn window_to_graph(&self, x: f32, y: f32) -> (f64, f64) {
         (
             self.min_x + ((x - self.start_x) / self.scale_x) as f64,
             self.min_y + ((y - self.start_y) / self.scale_y) as f64
@@ -54,6 +55,7 @@ pub struct PlotWidget {
     pub max_x: f64,
     pub max_y: f64,
     pub bounds_changed: bool,
+    pub data: Vec<DataSeries>,
     mouse: MouseHandler,
 }
 
@@ -70,12 +72,24 @@ impl PlotWidget {
             max_x: 1.0,
             max_y: 1.0,
             bounds_changed: false,
+            data: Vec::new(),
             mouse: MouseHandler::new(),
         }
     }
 
+    pub fn with_data(mut self, data_series: Vec<DataSeries>) -> Self {
+        for data in data_series {
+            self.data.push(data);
+        }
+        self
+    }
+
     fn get_transform(&self) -> CoordTransform {
         CoordTransform::new(self.rect, self.min_x, self.min_y, self.max_x, self.max_y)
+    }
+
+    pub fn add_data(&mut self, data: DataSeries) {
+        self.data.push(data);
     }
 
     pub fn want_focus(&self) -> bool {
@@ -88,7 +102,7 @@ impl PlotWidget {
         }
 
         match self.mouse.update(rl) {
-            MouseAction::Drag(button, delta) if button == MouseButton::MOUSE_BUTTON_LEFT => {
+            MouseAction::Drag(MouseButton::MOUSE_BUTTON_LEFT, delta) => {
                 let tr = self.get_transform();
                 self.min_x += (delta.x / tr.scale_x) as f64;
                 self.min_y += (delta.y / tr.scale_y) as f64;
@@ -105,7 +119,7 @@ impl PlotWidget {
 
                 let tr = self.get_transform();
                 let mouse_pos = rl.get_mouse_position();
-                let (graph_x, graph_y) = tr.from_window(mouse_pos.x, mouse_pos.y);
+                let (graph_x, graph_y) = tr.window_to_graph(mouse_pos.x, mouse_pos.y);
                 let delta_x = (graph_x - self.min_x) / cur_width;
                 let delta_y = (graph_y - self.min_y) / cur_height;
                 if zoom_axis.has_x() {
@@ -123,37 +137,51 @@ impl PlotWidget {
     }
 
     fn draw_widget(&mut self, d: &mut RaylibDrawHandle<'_>, expr: Option<&Expr>, eval: &mut ExprEvaluator) {
-        let expr = if let Some(expr) = expr {
-            expr
-        } else {
-            d.draw_rectangle_rec(self.rect, Color::new(224, 224, 224, 255));
-            d.draw_rectangle_lines_ex(self.rect, Self::BORDER, Color::BLACK);
-            return;
-        };
         d.draw_rectangle_rec(self.rect, Color::WHITE);
         d.draw_rectangle_lines_ex(self.rect, Self::BORDER, Color::BLACK);
 
-        let n_samples = 2 * self.rect.width.max(0.0).floor() as u32;
-        let x_step = (self.max_x - self.min_x) / n_samples as f64;
         let tr = self.get_transform();
 
-        let (x0, y0) = tr.to_window(0.0, 0.0);
+        // axes
+        let (x0, y0) = tr.graph_to_window(0.0, 0.0);
         d.draw_line_ex(Vector2::new(self.rect.x, y0), Vector2::new(self.rect.x + self.rect.width, y0), 2.0, self.axis_color);
         d.draw_line_ex(Vector2::new(x0, self.rect.y), Vector2::new(x0, self.rect.y + self.rect.height), 2.0, self.axis_color);
 
-        let mut last_x = 0.0;
-        let mut last_y = 0.0;
-        for i in 0..n_samples {
-            let x = self.min_x + i as f64 * x_step;
-            eval.set_var("x", x);
-            let y = eval.eval(expr);
+        // expression
+        if let Some(expr) = expr {
+            let n_samples = 2 * self.rect.width.max(0.0).floor() as u32;
+            let x_step = (self.max_x - self.min_x) / n_samples as f64;
+            let mut last_x = 0.0;
+            let mut last_y = 0.0;
+            for i in 0..n_samples {
+                let x = self.min_x + i as f64 * x_step;
+                eval.set_var("x", x);
+                let y = eval.eval(expr);
 
-            let (px, py) = tr.to_window(x, y);
-            if i > 0 && (py - last_y).abs() < self.rect.height {
-                d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, self.graph_color);
+                let (px, py) = tr.graph_to_window(x, y);
+                if i > 0 && (py - last_y).abs() < self.rect.height {
+                    d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, self.graph_color);
+                }
+                last_x = px;
+                last_y = py;
             }
-            last_x = px;
-            last_y = py;
+        }
+
+        // data
+        for data in self.data.iter() {
+            if data.items.is_empty() { continue; }
+            let win_x_min = self.rect.x;
+            let win_x_max = self.rect.x + self.rect.width;
+            let (mut last_x, mut last_y) = tr.graph_to_window(data.items[0].x, data.items[0].y);
+            for item in data.items[1..].iter() {
+                let (px, py) = tr.graph_to_window(item.x, item.y);
+                if (py - last_y).abs() < self.rect.height {
+                    if (last_x < win_x_min && px < win_x_min) || (last_x > win_x_max && px > win_x_max) { continue; }
+                    d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, self.graph_color);
+                }
+                last_x = px;
+                last_y = py;
+            }
         }
     }
 

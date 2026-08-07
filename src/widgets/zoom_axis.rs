@@ -32,15 +32,12 @@ impl ZoomAxisWidget {
             return;
         }
 
-        match self.mouse.update(rl) {
-            MouseAction::Up(button) if button == MouseButton::MOUSE_BUTTON_LEFT => {
-                self.zoom_axis = match self.zoom_axis {
-                    ZoomAxis::Both => { ZoomAxis::X }
-                    ZoomAxis::X => { ZoomAxis::Y }
-                    ZoomAxis::Y => { ZoomAxis::Both }
-                };
-            }
-            _ => {}
+        if let MouseAction::Up(MouseButton::MOUSE_BUTTON_LEFT) = self.mouse.update(rl) {
+            self.zoom_axis = match self.zoom_axis {
+                ZoomAxis::Both => { ZoomAxis::X }
+                ZoomAxis::X => { ZoomAxis::Y }
+                ZoomAxis::Y => { ZoomAxis::Both }
+            };
         }
     }
 
