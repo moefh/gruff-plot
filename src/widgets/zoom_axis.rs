@@ -49,7 +49,7 @@ impl ZoomAxisWidget {
 
         self.handle_mouse(d);
 
-        d.draw_rectangle_rec(self.rect, Color::WHITE);//Color::new(255, 255, 192, 255));
+        d.draw_rectangle_rec(self.rect, Color::WHITE);
         d.draw_rectangle_lines_ex(self.rect, Self::BORDER, Color::BLACK);
 
         let cx = self.rect.x + (0.5 * self.rect.width).floor();
@@ -59,17 +59,19 @@ impl ZoomAxisWidget {
         let ex = self.rect.x + self.rect.width - 5.0;
         let ey = self.rect.y + self.rect.height - 5.0;
 
-        match self.zoom_axis {
-            ZoomAxis::Both => {
-                d.draw_line_ex(Vector2::new(sx, cy), Vector2::new(ex, cy), 2.0, Color::BLUE);
-                d.draw_line_ex(Vector2::new(cx, sy), Vector2::new(cx, ey), 2.0, Color::BLUE);
-            }
-            ZoomAxis::X => {
-                d.draw_line_ex(Vector2::new(sx, cy), Vector2::new(ex, cy), 2.0, Color::BLUE);
-            }
-            ZoomAxis::Y => {
-                d.draw_line_ex(Vector2::new(cx, sy), Vector2::new(cx, ey), 2.0, Color::BLUE);
-            }
+        if self.zoom_axis == ZoomAxis::Both || self.zoom_axis == ZoomAxis::X {
+            d.draw_line_ex(Vector2::new(sx, cy), Vector2::new(ex, cy), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(sx, cy), Vector2::new(sx + 5.0, cy - 5.0), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(sx, cy), Vector2::new(sx + 5.0, cy + 5.0), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(ex, cy), Vector2::new(ex - 5.0, cy - 5.0), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(ex, cy), Vector2::new(ex - 5.0, cy + 5.0), 2.0, Color::BLUE);
+        }
+        if self.zoom_axis == ZoomAxis::Both || self.zoom_axis == ZoomAxis::Y {
+            d.draw_line_ex(Vector2::new(cx, sy), Vector2::new(cx, ey), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(cx, sy), Vector2::new(cx - 5.0, sy + 5.0), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(cx, sy), Vector2::new(cx + 5.0, sy + 5.0), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(cx, ey), Vector2::new(cx - 5.0, ey - 5.0), 2.0, Color::BLUE);
+            d.draw_line_ex(Vector2::new(cx, ey), Vector2::new(cx + 5.0, ey - 5.0), 2.0, Color::BLUE);
         }
     }
 }
