@@ -3,6 +3,48 @@ use raylib::prelude::*;
 use crate::expr::Expr;
 use crate::expr::eval::ExprEvaluator;
 
+use super::{
+    MouseHandler,
+    MouseAction,
+    ZoomAxis,
+};
+
+struct CoordTransform {
+    scale_x: f32,
+    scale_y: f32,
+    start_x: f32,
+    start_y: f32,
+    min_x: f64,
+    min_y: f64,
+}
+
+impl CoordTransform {
+    fn new(rect: Rectangle, min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> Self {
+        CoordTransform {
+            scale_x: rect.width / (max_x - min_x) as f32,
+            scale_y: -rect.height / (max_y - min_y) as f32,
+            start_x: rect.x,
+            start_y: rect.y + rect.height,
+            min_x,
+            min_y,
+        }
+    }
+
+    fn to_window(&self, x: f64, y: f64) -> (f32, f32) {
+        (
+            self.start_x + (x - self.min_x) as f32 * self.scale_x,
+            self.start_y + (y - self.min_y) as f32 * self.scale_y
+        )
+    }
+
+    fn from_window(&self, x: f32, y: f32) -> (f64, f64) {
+        (
+            self.min_x + ((x - self.start_x) / self.scale_x) as f64,
+            self.min_y + ((y - self.start_y) / self.scale_y) as f64
+        )
+    }
+}
+
 pub struct PlotWidget {
     pub rect: Rectangle,
     pub graph_color: Color,
@@ -11,6 +53,8 @@ pub struct PlotWidget {
     pub min_y: f64,
     pub max_x: f64,
     pub max_y: f64,
+    pub bounds_changed: bool,
+    mouse: MouseHandler,
 }
 
 impl PlotWidget {
@@ -25,11 +69,57 @@ impl PlotWidget {
             min_y: -1.0,
             max_x: 1.0,
             max_y: 1.0,
+            bounds_changed: false,
+            mouse: MouseHandler::new(),
         }
+    }
+
+    fn get_transform(&self) -> CoordTransform {
+        CoordTransform::new(self.rect, self.min_x, self.min_y, self.max_x, self.max_y)
     }
 
     pub fn want_focus(&self) -> bool {
         false
+    }
+
+    fn handle_mouse(&mut self, rl: &mut RaylibDrawHandle<'_>, zoom_axis: ZoomAxis) {
+        if ! self.mouse.is_inside(rl, self.rect) {
+            return;
+        }
+
+        match self.mouse.update(rl) {
+            MouseAction::Drag(button, delta) if button == MouseButton::MOUSE_BUTTON_LEFT => {
+                let tr = self.get_transform();
+                self.min_x += (delta.x / tr.scale_x) as f64;
+                self.min_y += (delta.y / tr.scale_y) as f64;
+                self.max_x += (delta.x / tr.scale_x) as f64;
+                self.max_y += (delta.y / tr.scale_y) as f64;
+                self.bounds_changed = true;
+            }
+            MouseAction::Wheel(delta) => {
+                let zoom = if delta < 0.0 { 1.1 } else { 0.9 };
+                let cur_width = self.max_x - self.min_x;
+                let cur_height = self.max_y - self.min_y;
+                let new_width = cur_width * zoom;
+                let new_height = cur_height * zoom;
+
+                let tr = self.get_transform();
+                let mouse_pos = rl.get_mouse_position();
+                let (graph_x, graph_y) = tr.from_window(mouse_pos.x, mouse_pos.y);
+                let delta_x = (graph_x - self.min_x) / cur_width;
+                let delta_y = (graph_y - self.min_y) / cur_height;
+                if zoom_axis.has_x() {
+                    self.min_x = graph_x - delta_x * new_width;
+                    self.max_x = graph_x + (1.0 - delta_x) * new_width;
+                }
+                if zoom_axis.has_y() {
+                    self.min_y = graph_y - delta_y * new_height;
+                    self.max_y = graph_y + (1.0 - delta_y) * new_height;
+                }
+                self.bounds_changed = true;
+            }
+            _ => {}
+        }
     }
 
     fn draw_widget(&mut self, d: &mut RaylibDrawHandle<'_>, expr: Option<&Expr>, eval: &mut ExprEvaluator) {
@@ -40,19 +130,14 @@ impl PlotWidget {
             d.draw_rectangle_lines_ex(self.rect, Self::BORDER, Color::BLACK);
             return;
         };
-
         d.draw_rectangle_rec(self.rect, Color::WHITE);
         d.draw_rectangle_lines_ex(self.rect, Self::BORDER, Color::BLACK);
+
         let n_samples = 2 * self.rect.width.max(0.0).floor() as u32;
         let x_step = (self.max_x - self.min_x) / n_samples as f64;
+        let tr = self.get_transform();
 
-        let scale_x = self.rect.width / (self.max_x - self.min_x) as f32;
-        let scale_y = -self.rect.height / (self.max_y - self.min_y) as f32;
-        let start_x = self.rect.x;
-        let start_y = self.rect.y + self.rect.height;
-
-        let x0 = start_x - self.min_x as f32 * scale_x;
-        let y0 = start_y - self.min_y as f32 * scale_y;
+        let (x0, y0) = tr.to_window(0.0, 0.0);
         d.draw_line_ex(Vector2::new(self.rect.x, y0), Vector2::new(self.rect.x + self.rect.width, y0), 2.0, self.axis_color);
         d.draw_line_ex(Vector2::new(x0, self.rect.y), Vector2::new(x0, self.rect.y + self.rect.height), 2.0, self.axis_color);
 
@@ -63,8 +148,7 @@ impl PlotWidget {
             eval.set_var("x", x);
             let y = eval.eval(expr);
 
-            let px = start_x + (x - self.min_x) as f32 * scale_x;
-            let py = start_y + (y - self.min_y) as f32 * scale_y;
+            let (px, py) = tr.to_window(x, y);
             if i > 0 && (py - last_y).abs() < self.rect.height {
                 d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, self.graph_color);
             }
@@ -73,9 +157,10 @@ impl PlotWidget {
         }
     }
 
-    pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>, expr: Option<&Expr>, eval: &mut ExprEvaluator) {
-        if self.rect.width.floor() <= 0.0 || self.rect.height.floor() < 0.0 { return; }
+    pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>, zoom_axis: ZoomAxis, expr: Option<&Expr>, eval: &mut ExprEvaluator) {
+        if self.rect.width.floor() <= 0.0 || self.rect.height.floor() <= 0.0 { return; }
 
+        self.handle_mouse(d, zoom_axis);
         d.draw_scissor_mode(
             self.rect.x.floor() as i32,
             self.rect.y.floor() as i32,

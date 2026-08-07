@@ -83,7 +83,6 @@ impl TextBoxWidget {
         self.text.replace_range(.., text.as_ref());
         self.cursor_pos = self.text.len();
         self.fix_cursor_pos();
-        self.changed = true;
     }
 
     pub fn move_cursor(&mut self, dir: i32) {
@@ -128,36 +127,44 @@ impl TextBoxWidget {
     }
 
     fn draw_widget(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
+        // draw background
         if focused {
             d.draw_rectangle_rec(self.rect, Color::new(224, 224, 224, 255));
         } else {
             d.draw_rectangle_rec(self.rect, Color::WHITE);
         }
+
+        // draw border
         if let Some(highlight_color) = highlight {
             d.draw_rectangle_lines_ex(self.rect, Self::BORDER, highlight_color);
         } else {
             d.draw_rectangle_lines_ex(self.rect, Self::BORDER, Color::BLACK);
         }
+
+        // draw text
         let pos = Vector2::new(self.rect.x + Self::PAD_LEFT, self.rect.y + Self::PAD_TOP);
         d.draw_text_codepoints(font, &self.text, pos, font_size, Self::SPACING, Color::BLACK);
-        if focused {
+
+        if focused && self.editable {
+            // draw cursor
             let cursor_offset = font.measure_text(&self.text[0..self.cursor_pos], font_size, Self::SPACING);
             let cursor_top = Vector2::new(pos.x + cursor_offset.x, self.rect.y + 4.0);
             let cursor_bot = Vector2::new(cursor_top.x, self.rect.y + self.rect.height - 4.0);
             d.draw_line_ex(cursor_top, cursor_bot, Self::CURSOR_WIDTH, Color::RED);
 
+            // handle keyboard
             if is_key_pressed(d, KeyboardKey::KEY_LEFT)      { self.move_cursor(-1); }
             if is_key_pressed(d, KeyboardKey::KEY_RIGHT)     { self.move_cursor(1); }
-            if is_key_pressed(d, KeyboardKey::KEY_BACKSPACE) { self.delete_char(-1); }
-            if is_key_pressed(d, KeyboardKey::KEY_DELETE)    { self.delete_char(1); }
             if is_key_pressed(d, KeyboardKey::KEY_HOME)      { self.set_cursor_pos(0); }
             if is_key_pressed(d, KeyboardKey::KEY_END)       { self.set_cursor_pos(self.get_text().len()); }
+            if is_key_pressed(d, KeyboardKey::KEY_BACKSPACE) { self.delete_char(-1); }
+            if is_key_pressed(d, KeyboardKey::KEY_DELETE)    { self.delete_char(1); }
             if let Some(ch) = d.get_char_pressed()           { self.insert_char(ch); }
         }
     }
 
     pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
-        if self.rect.width.floor() <= 0.0 || self.rect.height.floor() < 0.0 { return; }
+        if self.rect.width.floor() <= 0.0 || self.rect.height.floor() <= 0.0 { return; }
 
         d.draw_scissor_mode(
             self.rect.x.floor() as i32,
