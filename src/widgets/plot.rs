@@ -66,7 +66,6 @@ impl CoordTransform {
 
 pub struct PlotWidget {
     pub rect: Rectangle,
-    pub graph_color: Color,
     pub axis_color: Color,
     pub zoom_axis: ZoomAxis,
     pub min_x: f64,
@@ -82,8 +81,7 @@ impl PlotWidget {
     pub fn new(rect: Rectangle) -> Self {
         PlotWidget {
             rect,
-            graph_color: Color::BLACK,
-            axis_color: Color::BLUE,
+            axis_color: Color::BLACK,
             zoom_axis: ZoomAxis::Both,
             min_x: -1.0,
             min_y: -1.0,
@@ -153,7 +151,7 @@ impl PlotWidget {
         d.draw_line_ex(Vector2::new(x0, self.rect.y), Vector2::new(x0, self.rect.y + self.rect.height), 2.0, self.axis_color);
     }
 
-    pub fn draw_series(&self, d: &mut RaylibDrawHandle<'_>, items: &[data::DataItem]) {
+    pub fn draw_series(&self, d: &mut RaylibDrawHandle<'_>, items: &[data::DataItem], color: Color) {
         if items.is_empty() { return; }
         d.draw_scissor_mode(
             self.rect.x.floor() as i32,
@@ -169,7 +167,7 @@ impl PlotWidget {
                     let (px, py) = tr.graph_to_window(item.x, item.y);
                     if (py - last_y).abs() < self.rect.height {
                         if (last_x < win_x_min && px < win_x_min) || (last_x > win_x_max && px > win_x_max) { continue; }
-                        d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, self.graph_color);
+                        d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, color);
                     }
                     last_x = px;
                     last_y = py;
@@ -178,7 +176,7 @@ impl PlotWidget {
         );
     }
 
-    pub fn draw_expr(&self, d: &mut RaylibDrawHandle<'_>, expr: &Expr, eval: &mut ExprEvaluator) {
+    pub fn draw_expr(&self, d: &mut RaylibDrawHandle<'_>, expr: &Expr, eval: &mut ExprEvaluator, color: Color) {
         d.draw_scissor_mode(
             self.rect.x.floor() as i32,
             self.rect.y.floor() as i32,
@@ -197,7 +195,7 @@ impl PlotWidget {
 
                     let (px, py) = tr.graph_to_window(x, y);
                     if i > 0 && (py - last_y).abs() < self.rect.height {
-                        d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, self.graph_color);
+                        d.draw_line_ex(Vector2::new(last_x, last_y), Vector2::new(px, py), 2.0, color);
                     }
                     last_x = px;
                     last_y = py;

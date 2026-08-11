@@ -16,6 +16,13 @@ use super::widgets::{
     ButtonWidget,
 };
 
+const GRAPH_COLORS: &[Color] = &[
+    Color::BLUE,
+    Color::RED,
+    Color::MAGENTA,
+    Color::BROWN,
+];
+
 #[derive(Debug)]
 struct GraphSourceWidgets {
     kind_widget: usize,
@@ -432,13 +439,14 @@ impl Window {
     fn draw_plot(&mut self, d: &mut RaylibDrawHandle<'_>) {
         if let Some(plot) = self.widgets.get_plot_mut(self.plot_widget) {
             plot.draw(d);
-            for source in self.source_widgets.iter() {
+            for (num, source) in self.source_widgets.iter().enumerate() {
+                let color = GRAPH_COLORS[num % GRAPH_COLORS.len()];
                 match &source.source.data {
                     GraphSourceData::Expr(expr) => {
-                        plot.draw_expr(d, expr, &mut self.eval);
+                        plot.draw_expr(d, expr, &mut self.eval, color);
                     }
                     GraphSourceData::Series(series) => {
-                        plot.draw_series(d, &series.items);
+                        plot.draw_series(d, &series.items, color);
                     }
                 }
             }
