@@ -95,6 +95,6 @@ impl WavFile {
     }
 }
 
-pub fn read_wav_file(filename: &Path) -> Result<WavFile> {
-    WavFile::read(filename)
+pub fn read_wav_file(filename: impl AsRef<Path>) -> Result<WavFile> {
+    WavFile::read(filename.as_ref())
 }

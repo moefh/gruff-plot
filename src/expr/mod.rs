@@ -20,6 +20,8 @@ pub enum Expr {
 }
 
 impl Expr {
+    pub const ZERO: Expr = Expr::Number(0.0);
+
     pub fn parse(input: &str) -> Result<Self> {
         let mut parser = parser::Parser::new(input);
         parser.parse()

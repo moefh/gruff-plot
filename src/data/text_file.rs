@@ -7,10 +7,7 @@ use std::io::{
     BufReader,
 };
 
-use super::{
-    DataItem,
-    DataSeries,
-};
+use super::DataItem;
 
 fn skip_spaces(input: &str) -> usize {
     input
@@ -31,7 +28,7 @@ fn parse_float(input: &str) -> Option<(f64, usize)> {
     Some((val, end))
 }
 
-pub fn read_text_file(filename: impl AsRef<Path>, x_range: Option<(f64, f64)>) -> Result<DataSeries> {
+pub fn read_text_file(filename: impl AsRef<Path>, x_range: Option<(f64, f64)>) -> Result<Vec<DataItem>> {
     let mut num_columns = None;
     let mut reader = BufReader::new(File::open(filename.as_ref())?);
     let mut buffer = String::with_capacity(256);
@@ -83,5 +80,5 @@ pub fn read_text_file(filename: impl AsRef<Path>, x_range: Option<(f64, f64)>) -
         }
     }
 
-    Ok(DataSeries::new(data))
+    Ok(data)
 }
