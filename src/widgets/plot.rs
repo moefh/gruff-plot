@@ -68,6 +68,8 @@ pub struct PlotWidget {
     pub rect: Rectangle,
     pub axis_color: Color,
     pub zoom_axis: ZoomAxis,
+    pub hover_x: f64,
+    pub hover_y: f64,
     pub min_x: f64,
     pub min_y: f64,
     pub max_x: f64,
@@ -83,6 +85,8 @@ impl PlotWidget {
             rect,
             axis_color: Color::BLACK,
             zoom_axis: ZoomAxis::Both,
+            hover_x: 0.0,
+            hover_y: 0.0,
             min_x: -1.0,
             min_y: -1.0,
             max_x: 1.0,
@@ -99,10 +103,16 @@ impl PlotWidget {
         false
     }
 
+    pub fn mouse_cursor(&self) -> Option<MouseCursor> {
+        Some(MouseCursor::MOUSE_CURSOR_CROSSHAIR)
+    }
+
     pub fn handle_mouse(&mut self, rl: &mut RaylibDrawHandle<'_>) -> bool {
         if ! self.mouse.is_inside(rl, self.rect) {
             return false;
         }
+
+        let mouse_pos = rl.get_mouse_position();
 
         match self.mouse.update(rl) {
             MouseAction::Drag(MouseButton::MOUSE_BUTTON_LEFT, delta) => {
@@ -111,6 +121,8 @@ impl PlotWidget {
                 self.min_y += (delta.y / tr.scale_y) as f64;
                 self.max_x += (delta.x / tr.scale_x) as f64;
                 self.max_y += (delta.y / tr.scale_y) as f64;
+
+                (self.hover_x, self.hover_y) = self.get_transform().window_to_graph(mouse_pos.x, mouse_pos.y);
                 true
             }
             MouseAction::Wheel(delta) => {
@@ -121,7 +133,6 @@ impl PlotWidget {
                 let new_height = cur_height * zoom;
 
                 let tr = self.get_transform();
-                let mouse_pos = rl.get_mouse_position();
                 let (graph_x, graph_y) = tr.window_to_graph(mouse_pos.x, mouse_pos.y);
                 let delta_x = (graph_x - self.min_x) / cur_width;
                 let delta_y = (graph_y - self.min_y) / cur_height;
@@ -133,16 +144,19 @@ impl PlotWidget {
                     self.min_y = graph_y - delta_y * new_height;
                     self.max_y = graph_y + (1.0 - delta_y) * new_height;
                 }
+
+                (self.hover_x, self.hover_y) = self.get_transform().window_to_graph(mouse_pos.x, mouse_pos.y);
                 true
             }
             _ => {
+                (self.hover_x, self.hover_y) = self.get_transform().window_to_graph(mouse_pos.x, mouse_pos.y);
                 false
             }
         }
     }
 
-    fn draw_widget(&mut self, d: &mut RaylibDrawHandle<'_>) {
-        d.draw_rectangle_rec(self.rect, Color::WHITE);
+    fn draw_widget(&self, d: &mut RaylibDrawHandle<'_>) {
+        d.draw_rectangle_rec(self.rect, Color::new(240, 240, 255, 255));
         d.draw_rectangle_lines_ex(self.rect, Self::BORDER, Color::BLACK);
 
         let tr = self.get_transform();
@@ -204,7 +218,7 @@ impl PlotWidget {
         );
     }
 
-    pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>) {
+    pub fn draw(&self, d: &mut RaylibDrawHandle<'_>) {
         if self.rect.width.floor() <= 0.0 || self.rect.height.floor() <= 0.0 { return; }
         self.draw_widget(d);
     }

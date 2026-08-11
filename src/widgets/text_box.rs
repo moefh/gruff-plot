@@ -20,18 +20,15 @@ impl TextBoxWidget {
     pub const PAD_BOTTOM: f32 = 4.0;
     pub const PAD_VERTICAL: f32 = Self::PAD_TOP + Self::PAD_BOTTOM;
 
-    pub fn new(rect: Rectangle) -> Self {
+    pub fn new(rect: Rectangle, text: impl Into<String>) -> Self {
+        let text = text.into();
+        let cursor_pos = text.len();
         TextBoxWidget {
             rect,
-            text: String::new(),
+            text,
+            cursor_pos,
             editable: true,
-            cursor_pos: 0,
         }
-    }
-
-    pub fn with_text(mut self, text: &str) -> Self {
-        self.set_text(text);
-        self
     }
 
     #[allow(unused)]
@@ -42,6 +39,10 @@ impl TextBoxWidget {
 
     pub fn want_focus(&self) -> bool {
         true
+    }
+
+    pub fn mouse_cursor(&self) -> Option<MouseCursor> {
+        Some(MouseCursor::MOUSE_CURSOR_IBEAM)
     }
 
     fn try_fix_cursor_pos(&mut self) -> Option<usize> {
@@ -140,10 +141,10 @@ impl TextBoxWidget {
         false
     }
 
-    fn draw_widget(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
+    fn draw_widget(&self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
         // draw background
         if focused {
-            d.draw_rectangle_rec(self.rect, Color::new(224, 224, 224, 255));
+            d.draw_rectangle_rec(self.rect, Color::new(240, 255, 255, 255));
         } else {
             d.draw_rectangle_rec(self.rect, Color::WHITE);
         }
@@ -164,7 +165,7 @@ impl TextBoxWidget {
         }
     }
 
-    pub fn draw(&mut self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
+    pub fn draw(&self, d: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32, focused: bool, highlight: Option<Color>) {
         if self.rect.width.floor() <= 0.0 || self.rect.height.floor() <= 0.0 { return; }
 
         d.draw_scissor_mode(

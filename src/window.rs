@@ -14,6 +14,7 @@ use super::widgets::{
     TextBoxWidget,
     PlotWidget,
     ButtonWidget,
+    LabelWidget,
 };
 
 const GRAPH_COLORS: &[Color] = &[
@@ -83,13 +84,14 @@ pub struct Window {
     max_y_widget: usize,
     zoom_axis_widget: usize,
     plot_widget: usize,
+    coord_label_widget: usize,
     source_widgets: Vec<GraphSourceWidgets>,
 }
 
 impl Window {
     const BOUND_WIDTH: f32 = 100.0;
     const BUTTON_WIDTH: f32 = 100.0;
-    const KIND_WIDTH: f32 = 60.0;
+    const KIND_WIDTH: f32 = 80.0;
     const MARGIN: f32 = 12.0;
     const GRAPH_WIDTH: u32 = 1200;
     const GRAPH_HEIGHT: u32 = 800;
@@ -99,39 +101,42 @@ impl Window {
         let mut widgets = WidgetBag::new();
 
         let add_btn_widget = widgets.add_button(
-            ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::BUTTON_WIDTH, text_height)).with_text("Add")
+            ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::BUTTON_WIDTH, text_height), "Add")
         );
         let rm_btn_widget = widgets.add_button(
-            ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::BUTTON_WIDTH, text_height)).with_text("Remove")
+            ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::BUTTON_WIDTH, text_height), "Remove")
         );
 
         let min_x_widget = widgets.add_text_box(
-            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height)).with_text("-5.0")
+            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height), "-5.0")
         );
         let min_y_widget = widgets.add_text_box(
-            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height)).with_text("-3.0")
+            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height), "-3.0")
         );
         let max_x_widget = widgets.add_text_box(
-            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height)).with_text("5.0")
+            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height), "5.0")
         );
         let max_y_widget = widgets.add_text_box(
-            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height)).with_text("3.0")
+            TextBoxWidget::new(Rectangle::new(0.0, 0.0, Self::BOUND_WIDTH, text_height), "3.0")
         );
         let zoom_axis_widget = widgets.add_button(
-            ButtonWidget::new(Rectangle::new(0.0, 0.0, text_height, text_height))
+            ButtonWidget::new(Rectangle::new(0.0, 0.0, text_height, text_height), "")
         );
         let plot_widget = widgets.add_plot(
-            PlotWidget::new(Rectangle::new(0.0, text_height + 2.0 * Self::MARGIN, 0.0, 0.0))
+            PlotWidget::new(Rectangle::new(0.0, 0.0, 0.0, 0.0))
+        );
+        let coord_label_widget = widgets.add_label(
+            LabelWidget::new(Rectangle::new(0.0, 0.0, 0.0, font_size), "").with_align(widgets::TextAlign::Right)
         );
 
         let mut source_widgets = Vec::new();
         for source in graph_sources {
             let kind_text = Self::get_source_kind_text(source.kind);
             let kind_widget = widgets.add_button(
-                ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::KIND_WIDTH, text_height)).with_text(kind_text)
+                ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::KIND_WIDTH, text_height), kind_text)
             );
             let text_widget = widgets.add_text_box(
-                TextBoxWidget::new(Rectangle::new(0.0, 0.0, 0.0, text_height)).with_text(&source.text)
+                TextBoxWidget::new(Rectangle::new(0.0, 0.0, 0.0, text_height), &source.text)
             );
             source_widgets.push(GraphSourceWidgets::new(kind_widget, text_widget, source));
         }
@@ -155,6 +160,7 @@ impl Window {
             max_y_widget,
             zoom_axis_widget,
             plot_widget,
+            coord_label_widget,
             source_widgets,
         };
         window.handle_bounds_texts_changed(true);
@@ -163,9 +169,9 @@ impl Window {
 
     fn get_source_kind_text(kind: GraphSourceKind) -> &'static str {
         match kind {
-            GraphSourceKind::Expression => { "f(x)" }
-            GraphSourceKind::TxtFile => { "txt" }
-            GraphSourceKind::WavFile => { "wav" }
+            GraphSourceKind::Expression => { "f(x)=" }
+            GraphSourceKind::TxtFile => { "TXT" }
+            GraphSourceKind::WavFile => { "WAV" }
         }
     }
 
@@ -244,12 +250,23 @@ impl Window {
         }
 
         // plot
-        if let Some(plot) = self.widgets.get_plot_mut(self.plot_widget) {
+        let (plot_x, plot_w) = if let Some(plot) = self.widgets.get_plot_mut(self.plot_widget) {
             let y = (self.source_widgets.len() + 1) as f32 * (self.text_height + Self::MARGIN);
+            let bot = self.font_size + Self::MARGIN;
             plot.rect.width = (window_width - 2.0 * Self::MARGIN).min(Self::GRAPH_WIDTH as f32);
-            plot.rect.height = (window_height - y - 2.0 * Self::MARGIN).min(Self::GRAPH_HEIGHT as f32);
+            plot.rect.height = (window_height - y - 2.0 * Self::MARGIN - bot).min(Self::GRAPH_HEIGHT as f32);
             plot.rect.x = (0.5 * (window_width - plot.rect.width)).floor();
-            plot.rect.y = y + (0.5 * (window_height - plot.rect.height - y)).floor();
+            plot.rect.y = y + (0.5 * (window_height - plot.rect.height - y - bot)).floor();
+            (plot.rect.x, plot.rect.width)
+        } else {
+            (0.0, 0.0)
+        };
+
+        // mouse label
+        if let Some(label) = self.widgets.get_label_mut(self.coord_label_widget) {
+            label.rect.x = Self::MARGIN;
+            label.rect.y = window_height - self.font_size - Self::MARGIN;
+            label.rect.width = plot_x + plot_w - label.rect.x;
         }
     }
 
@@ -264,16 +281,16 @@ impl Window {
         if add_clicked {
             let kind = GraphSourceKind::Expression;
             let kind_text = Self::get_source_kind_text(kind);
-            let text_value = String::from("sin(x)");
+            let text_value = Self::get_source_kind_value(kind);
             let kind_widget = self.widgets.add_button(
-                ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::KIND_WIDTH, self.text_height)).with_text(kind_text)
+                ButtonWidget::new(Rectangle::new(0.0, 0.0, Self::KIND_WIDTH, self.text_height), kind_text)
             );
             let text_widget = self.widgets.add_text_box(
-                TextBoxWidget::new(Rectangle::new(0.0, 0.0, 0.0, self.text_height)).with_text(&text_value),
+                TextBoxWidget::new(Rectangle::new(0.0, 0.0, 0.0, self.text_height), text_value),
             );
             let source = GraphSource {
                 kind,
-                text: text_value,
+                text: String::from(text_value),
                 data: Self::make_new_source_data(kind),
             };
             let source = GraphSourceWidgets::new(kind_widget, text_widget, source);
@@ -382,15 +399,23 @@ impl Window {
             };
 
         // set plot zoom axis
-        let plot_changed = if let Some(plot) = self.widgets.get_plot_mut(self.plot_widget) && let Some(zoom_axis) = set_zoom_axis {
-            plot.zoom_axis = zoom_axis;
-            plot.handle_mouse(d)
+        let (plot_changed, plot_x, plot_y) = if let Some(plot) = self.widgets.get_plot_mut(self.plot_widget) {
+            if let Some(zoom_axis) = set_zoom_axis {
+                plot.zoom_axis = zoom_axis;
+            }
+            let plot_changed = plot.handle_mouse(d);
+            (plot_changed, plot.hover_x, plot.hover_y)
         } else {
-            false
+            (false, 0.0, 0.0)
         };
         if plot_changed {
             self.draw_plot(d);
             self.handle_plot_bounds_changed(true);
+        }
+
+        // coord label
+        if let Some(label) = self.widgets.get_label_mut(self.coord_label_widget) {
+            label.set_text(format!("{:<+22}  {:<+22}", plot_x, plot_y));
         }
     }
 
@@ -457,13 +482,13 @@ impl Window {
         d.draw_rectangle(0, 0, self.width, self.height, Color::WHITE);
 
         // add/remove buttons
-        if let Some(button) = self.widgets.get_button_mut(self.add_btn_widget) { button.draw(d, font, self.font_size); }
-        if let Some(button) = self.widgets.get_button_mut(self.rm_btn_widget) { button.draw(d, font, self.font_size); }
+        if let Some(button) = self.widgets.get_button(self.add_btn_widget) { button.draw(d, font, self.font_size); }
+        if let Some(button) = self.widgets.get_button(self.rm_btn_widget) { button.draw(d, font, self.font_size); }
         let focus = self.widgets.focus;
 
         // sources
         for source in self.source_widgets.iter_mut() {
-            if let Some(button) = self.widgets.get_button_mut(source.kind_widget) {
+            if let Some(button) = self.widgets.get_button(source.kind_widget) {
                 button.draw(d, font, self.font_size);
             }
             if let Some(func) = self.widgets.get_text_box_mut(source.text_widget) {
@@ -474,7 +499,7 @@ impl Window {
 
         // bounds
         for widget in [self.min_x_widget, self.min_y_widget, self.max_x_widget, self.max_y_widget] {
-            if let Some(text) = self.widgets.get_text_box_mut(widget) {
+            if let Some(text) = self.widgets.get_text_box(widget) {
                 text.draw(d, font, self.font_size, focus == widget, None);
             }
         }
@@ -488,5 +513,10 @@ impl Window {
 
         // graph plot
         self.draw_plot(d);
+
+        // coord label
+        if let Some(label) = self.widgets.get_label(self.coord_label_widget) {
+            label.draw(d, font, self.font_size);
+        }
     }
 }

@@ -1,17 +1,20 @@
 mod text_box;
 mod plot;
 mod button;
+mod label;
 
 use raylib::prelude::*;
 
 pub use text_box::*;
 pub use plot::*;
 pub use button::*;
+pub use label::*;
 
 pub enum Widget {
     TextBox(TextBoxWidget),
     Plot(PlotWidget),
     Button(ButtonWidget),
+    Label(LabelWidget),
 }
 
 impl Widget {
@@ -22,7 +25,16 @@ impl Widget {
             Widget::TextBox(w) => { w.want_focus() }
             Widget::Plot(w) => { w.want_focus() }
             Widget::Button(w) => { w.want_focus() }
+            Widget::Label(w) => { w.want_focus() }
+        }
+    }
 
+    pub fn mouse_cursor(&self) -> Option<MouseCursor> {
+        match self {
+            Widget::TextBox(w) => { w.mouse_cursor() }
+            Widget::Plot(w) => { w.mouse_cursor() }
+            Widget::Button(w) => { w.mouse_cursor() }
+            Widget::Label(w) => { w.mouse_cursor() }
         }
     }
 
@@ -31,6 +43,7 @@ impl Widget {
             Widget::TextBox(w) => { w.rect }
             Widget::Plot(w) => { w.rect }
             Widget::Button(w) => { w.rect }
+            Widget::Label(w) => { w.rect }
         }
     }
 }
@@ -84,17 +97,27 @@ impl WidgetBag {
         widget
     }
 
-    pub fn get_text_box(&mut self, index: usize) -> Option<&TextBoxWidget> {
+    pub fn add_label(&mut self, w: LabelWidget) -> usize {
+        let widget = self.widgets.len();
+        self.widgets.push(Widget::Label(w));
+        widget
+    }
+
+    pub fn get_text_box(&self, index: usize) -> Option<&TextBoxWidget> {
         self.widgets.get(index).and_then(|w| { if let Widget::TextBox(w) = w { Some(w) } else { None } })
     }
 
-    pub fn get_plot(&mut self, index: usize) -> Option<&PlotWidget> {
+    pub fn get_plot(&self, index: usize) -> Option<&PlotWidget> {
         self.widgets.get(index).and_then(|w| { if let Widget::Plot(w) = w { Some(w) } else { None } })
     }
 
     #[allow(unused)]
-    pub fn get_button(&mut self, index: usize) -> Option<&ButtonWidget> {
+    pub fn get_button(&self, index: usize) -> Option<&ButtonWidget> {
         self.widgets.get(index).and_then(|w| { if let Widget::Button(w) = w { Some(w) } else { None } })
+    }
+
+    pub fn get_label(&self, index: usize) -> Option<&LabelWidget> {
+        self.widgets.get(index).and_then(|w| { if let Widget::Label(w) = w { Some(w) } else { None } })
     }
 
     pub fn get_text_box_mut(&mut self, index: usize) -> Option<&mut TextBoxWidget> {
@@ -109,6 +132,10 @@ impl WidgetBag {
         self.widgets.get_mut(index).and_then(|w| { if let Widget::Button(w) = w { Some(w) } else { None } })
     }
 
+    pub fn get_label_mut(&mut self, index: usize) -> Option<&mut LabelWidget> {
+        self.widgets.get_mut(index).and_then(|w| { if let Widget::Label(w) = w { Some(w) } else { None } })
+    }
+
     pub fn handle_keyboard(&mut self, rl: &RaylibHandle) {
         if rl.is_key_pressed(KeyboardKey::KEY_TAB) {
             let direction = if rl.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) || rl.is_key_down(KeyboardKey::KEY_RIGHT_SHIFT) { -1 } else { 1 };
@@ -117,8 +144,19 @@ impl WidgetBag {
     }
 
     pub fn handle_mouse(&mut self, rl: &RaylibHandle) {
+        let mouse_pos = rl.get_mouse_position();
+
+        // set cursor
+        let mouse_widget = self.widgets.iter().find(|w| w.get_rect().check_collision_point_rec(mouse_pos));
+        if let Some(widget) = mouse_widget {
+            let cursor = widget.mouse_cursor().unwrap_or(MouseCursor::MOUSE_CURSOR_DEFAULT);
+            rl.set_mouse_cursor(cursor);
+        } else {
+            rl.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_DEFAULT);
+        }
+
+        // change focus
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
-            let mouse_pos = rl.get_mouse_position();
             for (index, widget) in self.widgets.iter_mut().enumerate() {
                 if widget.want_focus() && widget.get_rect().check_collision_point_rec(mouse_pos) {
                     self.focus = index;
@@ -127,6 +165,13 @@ impl WidgetBag {
             }
         }
     }
+}
+
+#[allow(unused)]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
 }
 
 #[allow(unused)]
