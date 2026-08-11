@@ -1,5 +1,12 @@
 use std::io::{Result, Error};
 
+use super::Expr;
+use super::tokenizer::{
+    Token,
+    TokenPosition,
+    Tokenizer,
+};
+
 #[derive(Copy, Clone, Debug)]
 enum Operator {
     UnaryMinus,
@@ -62,13 +69,6 @@ fn get_operator(arity: u8, t: &Token) -> Option<&OperatorDef> {
     t.get_punct().and_then(|ch| OPERATORS.iter().find(|op| op.arity == arity && Some(ch) == op.ch))
 }
 
-use super::Expr;
-use super::tokenizer::{
-    Token,
-    TokenPosition,
-    Tokenizer,
-};
-
 pub struct Parser<'a> {
     tok: Tokenizer<'a>,
     unget_data: Vec<Token>,
@@ -118,21 +118,18 @@ impl<'a> Parser<'a> {
 
     fn resolve_expr_stack(
         &mut self,
-        _pos: TokenPosition,
         opns: &mut Vec<Expr>,
         oprs: &mut Vec<(OperatorDef, TokenPosition)>,
         stop_prec: i8,
     ) -> Result<()> {
-        while ! oprs.is_empty() {
-            if let Some((op, pos)) = oprs.pop() {
-                let op_prec = if op.assoc == OperatorAssoc::Right { op.prec-1 } else { op.prec };
-                if op_prec < stop_prec {
-                    oprs.push((op, pos));
-                    break;
-                }
-                let expr = op.new_expr(opns).ok_or(Error::other("syntax error"))?;
-                opns.push(expr);
+        while let Some((op, pos)) = oprs.pop() {
+            let op_prec = if op.assoc == OperatorAssoc::Right { op.prec-1 } else { op.prec };
+            if op_prec < stop_prec {
+                oprs.push((op, pos));
+                break;
             }
+            let expr = op.new_expr(opns).ok_or(Error::other("syntax error"))?;
+            opns.push(expr);
         }
         Ok(())
     }
@@ -151,7 +148,7 @@ impl<'a> Parser<'a> {
                     expect_opn = false;
                     self.parse_expr(true, &[')'])?
                 } else {
-                    self.resolve_expr_stack(t.pos, &mut opns, &mut oprs, PREC_FUNC_CALL)?;
+                    self.resolve_expr_stack(&mut opns, &mut oprs, PREC_FUNC_CALL)?;
                     let func = opns.pop().ok_or(Error::other("syntax error (no function on stack)"))?;
                     let func_name = if let Expr::Variable(func_name) = func {
                         func_name
@@ -196,7 +193,7 @@ impl<'a> Parser<'a> {
                     let op = get_operator(2, &t).ok_or(
                         Error::other(format!("expected '(' or binary operator, got '{}'", t))
                     )?;
-                    self.resolve_expr_stack(t.pos, &mut opns, &mut oprs, op.prec)?;
+                    self.resolve_expr_stack(&mut opns, &mut oprs, op.prec)?;
                     expect_opn = true;
                     op
                 };
@@ -216,7 +213,7 @@ impl<'a> Parser<'a> {
 
             // stop char
             if let Some(ch) = t.get_punct() && stop_chars.contains(&ch) {
-                self.resolve_expr_stack(t.pos, &mut opns, &mut oprs, i8::MIN)?;
+                self.resolve_expr_stack(&mut opns, &mut oprs, i8::MIN)?;
                 if opns.len() > 1 {
                     return Err(Error::other("syntax error (stack not empty)"));
                 }
@@ -234,7 +231,7 @@ impl<'a> Parser<'a> {
                 if ! stop_chars.is_empty() {
                     return Err(Error::other("unexpected end of expression"));
                 }
-                self.resolve_expr_stack(t.pos, &mut opns, &mut oprs, i8::MIN)?;
+                self.resolve_expr_stack(&mut opns, &mut oprs, i8::MIN)?;
                 if opns.len() > 1 {
                     return Err(Error::other("syntax error (stack not empty)"));
                 }
