@@ -329,6 +329,7 @@ impl Window {
                 if source_kind_changed {
                     func.set_text(Self::get_source_kind_value(source.source.kind));
                 }
+                func.handle_mouse(d, font, self.font_size);
                 if func.handle_keyboard(d, focused) || source_kind_changed {
                     let text = func.get_text();
                     match source.source.kind {
@@ -377,8 +378,11 @@ impl Window {
         let mut bounds_changed = false;
         for widget in [self.min_x_widget, self.min_y_widget, self.max_x_widget, self.max_y_widget] {
             let focus = self.widgets.focus;
-            if let Some(text) = self.widgets.get_text_box_mut(widget) && text.handle_keyboard(d, focus == widget) {
-                bounds_changed = true;
+            if let Some(text) = self.widgets.get_text_box_mut(widget) {
+                if text.handle_keyboard(d, focus == widget) {
+                    bounds_changed = true;
+                }
+                text.handle_mouse(d, font, self.font_size);
             }
         }
         if bounds_changed {

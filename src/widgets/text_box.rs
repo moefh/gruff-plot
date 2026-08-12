@@ -1,15 +1,20 @@
 use raylib::prelude::*;
-use unicode_segmentation::GraphemeCursor;
 
-fn is_key_pressed(d: &RaylibDrawHandle<'_>, key: KeyboardKey) -> bool {
-    d.is_key_pressed(key) || d.is_key_pressed_repeat(key)
-}
+use super::{
+    is_key_pressed,
+    is_key_pressed_with,
+    KeyMod,
+    TextCursor,
+    MouseHandler,
+    MouseAction,
+};
 
 pub struct TextBoxWidget {
     pub rect: Rectangle,
     pub editable: bool,
     text: String,
     cursor_pos: usize,
+    mouse: MouseHandler,
 }
 
 impl TextBoxWidget {
@@ -28,6 +33,7 @@ impl TextBoxWidget {
             text,
             cursor_pos,
             editable: true,
+            mouse: MouseHandler::new(),
         }
     }
 
@@ -45,26 +51,16 @@ impl TextBoxWidget {
         Some(MouseCursor::MOUSE_CURSOR_IBEAM)
     }
 
-    fn try_fix_cursor_pos(&mut self) -> Option<usize> {
-        let text_len = self.text.len();
-        if self.cursor_pos > text_len {
-            return None;
-        }
+    fn cursor(&self) -> TextCursor {
+        TextCursor::new(&self.text, self.cursor_pos)
+    }
 
-        let mut cursor = GraphemeCursor::new(self.cursor_pos, text_len, true);
-        if ! cursor.is_boundary(&self.text, 0).ok()? {
-            cursor.next_boundary(&self.text, 0).ok()?
-        } else {
-            Some(self.cursor_pos)
-        }
+    fn new_cursor(&self, pos: usize) -> TextCursor {
+        TextCursor::new(&self.text, pos)
     }
 
     fn fix_cursor_pos(&mut self) {
-        if let Some(pos) = self.try_fix_cursor_pos() {
-            self.cursor_pos = pos;
-        } else {
-            self.cursor_pos = self.text.len();
-        }
+        self.cursor_pos = self.cursor().pos();
     }
 
     #[allow(unused)]
@@ -84,19 +80,21 @@ impl TextBoxWidget {
     }
 
     pub fn move_cursor(&mut self, dir: i32) {
-        let mut cursor = GraphemeCursor::new(self.cursor_pos, self.text.len(), true);
-        if dir < 0 && let Ok(Some(pos)) = cursor.prev_boundary(&self.text, 0) {
-            self.cursor_pos = pos;
-        } else if dir > 0 && let Ok(Some(pos)) = cursor.next_boundary(&self.text, 0) {
-            self.cursor_pos = pos;
-        }
+        self.cursor_pos = self.cursor().move_glyph(&self.text, dir);
+    }
+
+    pub fn move_cursor_word(&mut self, dir: i32) {
+        let mut cursor = self.cursor();
+        cursor.move_glyph_while(&self.text, dir, |glyph| glyph.chars().next().map(|ch| ! ch.is_alphanumeric()).unwrap_or(false));
+        cursor.move_glyph_while(&self.text, dir, |glyph| glyph.chars().next().map(|ch| ch.is_alphanumeric()).unwrap_or(false));
+        self.cursor_pos = cursor.pos();
     }
 
     pub fn delete_char(&mut self, dir: i32) -> bool {
-        let mut cursor = GraphemeCursor::new(self.cursor_pos, self.text.len(), true);
+        let mut cursor = self.cursor();
         let (start, end) = if dir < 0 {
             let end = self.cursor_pos;
-            if let Ok(Some(start)) = cursor.prev_boundary(&self.text, 0) {
+            if let Some(start) = cursor.try_move_glyph(&self.text, -1) {
                 self.cursor_pos = start;
                 (start, end)
             } else {
@@ -104,7 +102,7 @@ impl TextBoxWidget {
             }
         } else if dir > 0 {
             let start = self.cursor_pos;
-            if let Ok(Some(end)) = cursor.next_boundary(&self.text, 0) {
+            if let Some(end) = cursor.try_move_glyph(&self.text, 1) {
                 (start, end)
             } else {
                 return false;
@@ -126,18 +124,77 @@ impl TextBoxWidget {
         true
     }
 
+    pub fn handle_mouse(&mut self, rl: &mut RaylibDrawHandle<'_>, font: &Font, font_size: f32) -> bool {
+        if ! self.mouse.is_inside(rl, self.rect) {
+            return false;
+        }
+
+        let mouse_pos = rl.get_mouse_position();
+
+        match self.mouse.update(rl) {
+            MouseAction::Down(MouseButton::MOUSE_BUTTON_LEFT) |
+            MouseAction::Drag(MouseButton::MOUSE_BUTTON_LEFT, _) => {
+                let mouse_x = mouse_pos.x - (self.rect.x + Self::PAD_LEFT);
+                let mut last_dist = f32::INFINITY;
+                let mut cursor = self.new_cursor(0);
+                loop {
+                    let size = font.measure_text(&self.text[0..cursor.pos()], font_size, super::Widget::TEXT_SPACING);
+                    let dist = mouse_x - size.x;
+                    if dist < 0.0 || dist.abs() > last_dist {
+                        if dist.abs() > last_dist {
+                            cursor.move_glyph(&self.text, -1);
+                        }
+                        self.set_cursor_pos(cursor.pos());
+                        break;
+                    }
+                    if cursor.move_glyph(&self.text, 1) == self.text.len() {
+                        self.set_cursor_pos(cursor.pos());
+                        break;
+                    }
+                    last_dist = dist;
+                }
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+
     pub fn handle_keyboard(&mut self, d: &mut RaylibDrawHandle<'_>, focused: bool) -> bool {
         if ! focused || ! self.editable { return false; }
 
-        if is_key_pressed(d, KeyboardKey::KEY_LEFT)      { self.move_cursor(-1); }
-        if is_key_pressed(d, KeyboardKey::KEY_RIGHT)     { self.move_cursor(1); }
-        if is_key_pressed(d, KeyboardKey::KEY_HOME)      { self.set_cursor_pos(0); }
-        if is_key_pressed(d, KeyboardKey::KEY_END)       { self.set_cursor_pos(self.get_text().len()); }
+        if is_key_pressed(d, KeyboardKey::KEY_LEFT)  { self.move_cursor(-1); }
+        if is_key_pressed(d, KeyboardKey::KEY_RIGHT) { self.move_cursor(1); }
+        if is_key_pressed(d, KeyboardKey::KEY_HOME)  { self.set_cursor_pos(0); }
+        if is_key_pressed(d, KeyboardKey::KEY_END)   { self.set_cursor_pos(self.get_text().len()); }
+
+        if is_key_pressed_with(d, KeyboardKey::KEY_LEFT, KeyMod::Ctrl)  { self.move_cursor_word(-1); }
+        if is_key_pressed_with(d, KeyboardKey::KEY_RIGHT, KeyMod::Ctrl) { self.move_cursor_word(1); }
+        if is_key_pressed_with(d, KeyboardKey::KEY_A, KeyMod::Ctrl) { self.set_cursor_pos(0); }
+        if is_key_pressed_with(d, KeyboardKey::KEY_E, KeyMod::Ctrl) { self.set_cursor_pos(self.get_text().len()); }
+        if is_key_pressed_with(d, KeyboardKey::KEY_D, KeyMod::Ctrl) { self.delete_char(1); }
 
         if is_key_pressed(d, KeyboardKey::KEY_BACKSPACE) { return self.delete_char(-1); }
         if is_key_pressed(d, KeyboardKey::KEY_DELETE)    { return self.delete_char(1); }
         if let Some(ch) = d.get_char_pressed()           { return self.insert_char(ch); }
 
+        if is_key_pressed_with(d, KeyboardKey::KEY_C, KeyMod::Ctrl) {
+            d.set_clipboard_text(&self.text).unwrap_or(());
+        }
+        if is_key_pressed_with(d, KeyboardKey::KEY_V, KeyMod::Ctrl) && let Ok(text) = d.get_clipboard_text() && ! text.is_empty() {
+            if let Some(line_end) = text.char_indices().find(|(_, ch)| *ch == '\r' || *ch == '\n').map(|(index, _)| index) {
+                if line_end > 0 {
+                    self.text.replace_range(self.cursor_pos..self.cursor_pos, &text[..line_end]);
+                    self.set_cursor_pos(self.cursor_pos + line_end);
+                    return true;
+                }
+            } else {
+                self.text.replace_range(self.cursor_pos..self.cursor_pos, &text);
+                self.set_cursor_pos(self.cursor_pos + text.len());
+                return true
+            }
+        }
         false
     }
 
