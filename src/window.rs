@@ -73,7 +73,7 @@ pub struct Window {
     height: i32,
     font_size: f32,
     text_height: f32,
-    eval: expr::eval::ExprEvaluator,
+    expr_env: expr::Environment,
     widgets: WidgetBag,
 
     add_btn_widget: usize,
@@ -96,7 +96,7 @@ impl Window {
     const GRAPH_WIDTH: u32 = 1200;
     const GRAPH_HEIGHT: u32 = 800;
 
-    pub fn new(font_size: f32, graph_sources: Vec<GraphSource>) -> Self {
+    pub fn new(font_size: f32, graph_sources: Vec<GraphSource>, expr_env: expr::Environment) -> Self {
         let text_height = font_size + widgets::TextBoxWidget::PAD_VERTICAL;
         let mut widgets = WidgetBag::new();
 
@@ -149,8 +149,8 @@ impl Window {
             height: 0,
             font_size,
             text_height,
+            expr_env,
             widgets,
-            eval: expr::eval::ExprEvaluator::new().with_math_funcs().with_math_consts(),
 
             add_btn_widget,
             rm_btn_widget,
@@ -183,12 +183,12 @@ impl Window {
         }
     }
 
-    fn make_new_source_data(kind: GraphSourceKind) -> GraphSourceData {
+    fn make_new_source_data(kind: GraphSourceKind, expr_env: &expr::Environment) -> GraphSourceData {
         match kind {
             GraphSourceKind::Expression => {
                 GraphSourceData::Expr(expr::Expr::Func1Call(
-                    String::from("sin"),
-                    Box::new(expr::Expr::Variable(String::from("x")))
+                    expr_env.get_func1_index("sin").unwrap_or(0),
+                    Box::new(expr::Expr::Variable(expr_env.get_var_index("x").unwrap_or(0)))
                 ))
             }
             GraphSourceKind::TxtFile | GraphSourceKind::WavFile => {
@@ -291,7 +291,7 @@ impl Window {
             let source = GraphSource {
                 kind,
                 text: String::from(text_value),
-                data: Self::make_new_source_data(kind),
+                data: Self::make_new_source_data(kind, &self.expr_env),
             };
             let source = GraphSourceWidgets::new(kind_widget, text_widget, source);
             self.widgets.focus = source.text_widget;
@@ -320,7 +320,7 @@ impl Window {
                     GraphSourceKind::TxtFile => { GraphSourceKind::WavFile }
                     GraphSourceKind::WavFile => { GraphSourceKind::Expression }
                 };
-                source.source.data = Self::make_new_source_data(source.source.kind);
+                source.source.data = Self::make_new_source_data(source.source.kind, &self.expr_env);
                 button.set_text(Self::get_source_kind_text(source.source.kind));
                 source_kind_changed = true;
             }
@@ -354,7 +354,7 @@ impl Window {
                             }
                         }
                         GraphSourceKind::Expression => {
-                            if let Ok(expr) = expr::Expr::parse(text) {
+                            if let Ok(expr) = expr::Expr::parse(text, &self.expr_env) {
                                 source.source.data = GraphSourceData::Expr(expr);
                                 source.invalid = false;
                             } else {
@@ -468,11 +468,11 @@ impl Window {
     fn draw_plot(&mut self, d: &mut RaylibDrawHandle<'_>) {
         if let Some(plot) = self.widgets.get_plot_mut(self.plot_widget) {
             plot.draw(d);
-            for (num, source) in self.source_widgets.iter().enumerate() {
+            for (num, source) in self.source_widgets.iter_mut().enumerate() {
                 let color = GRAPH_COLORS[num % GRAPH_COLORS.len()];
-                match &source.source.data {
+                match &mut source.source.data {
                     GraphSourceData::Expr(expr) => {
-                        plot.draw_expr(d, expr, &mut self.eval, color);
+                        plot.draw_expr(d, expr, &mut self.expr_env, color);
                     }
                     GraphSourceData::Series(series) => {
                         plot.draw_series(d, &series.items, color);

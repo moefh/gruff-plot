@@ -7,10 +7,8 @@ pub struct TextCursor {
 impl TextCursor {
     pub fn new(text: &str, pos: usize) -> Self {
         let mut cursor = GraphemeCursor::new(pos, text.len(), true);
-        if ! cursor.is_boundary(text, 0).unwrap_or(false) {
-            if cursor.next_boundary(text, 0).is_err() {
-                cursor.set_cursor(text.len());
-            }
+        if ! cursor.is_boundary(text, 0).unwrap_or(false) && cursor.next_boundary(text, 0).is_err() {
+            cursor.set_cursor(text.len());
         }
         TextCursor {
             cursor

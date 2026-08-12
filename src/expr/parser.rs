@@ -1,11 +1,25 @@
 use std::io::{Result, Error};
 
-use super::Expr;
 use super::tokenizer::{
     Token,
     TokenPosition,
     Tokenizer,
 };
+
+#[derive(Debug)]
+pub enum ExprAst {
+    Number(f64),
+    Variable(String),
+    Func0Call(String),
+    Func1Call(String, Box<ExprAst>),
+    Func2Call(String, Box<[ExprAst; 2]>),
+    Add(Box<[ExprAst; 2]>),
+    Sub(Box<[ExprAst; 2]>),
+    Mul(Box<[ExprAst; 2]>),
+    Div(Box<[ExprAst; 2]>),
+    Pow(Box<[ExprAst; 2]>),
+    Minus(Box<ExprAst>),
+}
 
 #[derive(Copy, Clone, Debug)]
 enum Operator {
@@ -34,14 +48,14 @@ struct OperatorDef {
 }
 
 impl OperatorDef {
-    fn new_expr(&self, opns: &mut Vec<Expr>) -> Option<Expr> {
+    fn new_expr(&self, opns: &mut Vec<ExprAst>) -> Option<ExprAst> {
         match self.op {
-            Operator::UnaryMinus => { Some(Expr::Minus(Box::new(opns.pop()?))) }
-            Operator::Add => { let r = opns.pop()?; let l = opns.pop()?; Some(Expr::Add(Box::new([l, r]))) }
-            Operator::Sub => { let r = opns.pop()?; let l = opns.pop()?; Some(Expr::Sub(Box::new([l, r]))) }
-            Operator::Mul => { let r = opns.pop()?; let l = opns.pop()?; Some(Expr::Mul(Box::new([l, r]))) }
-            Operator::Div => { let r = opns.pop()?; let l = opns.pop()?; Some(Expr::Div(Box::new([l, r]))) }
-            Operator::Pow => { let r = opns.pop()?; let l = opns.pop()?; Some(Expr::Pow(Box::new([l, r]))) }
+            Operator::UnaryMinus => { Some(ExprAst::Minus(Box::new(opns.pop()?))) }
+            Operator::Add => { let r = opns.pop()?; let l = opns.pop()?; Some(ExprAst::Add(Box::new([l, r]))) }
+            Operator::Sub => { let r = opns.pop()?; let l = opns.pop()?; Some(ExprAst::Sub(Box::new([l, r]))) }
+            Operator::Mul => { let r = opns.pop()?; let l = opns.pop()?; Some(ExprAst::Mul(Box::new([l, r]))) }
+            Operator::Div => { let r = opns.pop()?; let l = opns.pop()?; Some(ExprAst::Div(Box::new([l, r]))) }
+            Operator::Pow => { let r = opns.pop()?; let l = opns.pop()?; Some(ExprAst::Pow(Box::new([l, r]))) }
         }
     }
 }
@@ -93,7 +107,7 @@ impl<'a> Parser<'a> {
         self.unget_data.push(t);
     }
 
-    fn parse_expr_list(&mut self) -> Result<Vec<Expr>> {
+    fn parse_expr_list(&mut self) -> Result<Vec<ExprAst>> {
         // check empty list
         let t = self.read()?;
         if t.is_punct(')') {
@@ -118,7 +132,7 @@ impl<'a> Parser<'a> {
 
     fn resolve_expr_stack(
         &mut self,
-        opns: &mut Vec<Expr>,
+        opns: &mut Vec<ExprAst>,
         oprs: &mut Vec<(OperatorDef, TokenPosition)>,
         stop_prec: i8,
     ) -> Result<()> {
@@ -134,7 +148,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn parse_expr(&mut self, consume_stop: bool, stop_chars: &[char]) -> Result<Expr> {
+    fn parse_expr(&mut self, consume_stop: bool, stop_chars: &[char]) -> Result<ExprAst> {
         let mut expect_opn = true;
         let mut opns = Vec::new();
         let mut oprs = Vec::new();
@@ -150,7 +164,7 @@ impl<'a> Parser<'a> {
                 } else {
                     self.resolve_expr_stack(&mut opns, &mut oprs, PREC_FUNC_CALL)?;
                     let func = opns.pop().ok_or(Error::other("syntax error (no function on stack)"))?;
-                    let func_name = if let Expr::Variable(func_name) = func {
+                    let func_name = if let ExprAst::Variable(func_name) = func {
                         func_name
                     } else {
                         return Err(Error::other("function must be an identifier"));
@@ -163,12 +177,12 @@ impl<'a> Parser<'a> {
                     }
                     if let Some(a0) = arg0.take() {
                         if let Some(a1) = arg1.take() {
-                            Expr::Func2Call(func_name, Box::new([a1, a0]))
+                            ExprAst::Func2Call(func_name, Box::new([a1, a0]))
                         } else {
-                            Expr::Func1Call(func_name, Box::new(a0))
+                            ExprAst::Func1Call(func_name, Box::new(a0))
                         }
                     } else {
-                        Expr::Func0Call(func_name)
+                        ExprAst::Func0Call(func_name)
                     }
                 };
                 opns.push(expr);
@@ -180,7 +194,7 @@ impl<'a> Parser<'a> {
                 if ! expect_opn {
                     return Err(Error::other(format!("expected '(' or operator, got {}'", t)));
                 }
-                opns.push(Expr::Number(n));
+                opns.push(ExprAst::Number(n));
                 expect_opn = false;
                 continue;
             }
@@ -206,7 +220,7 @@ impl<'a> Parser<'a> {
                 if ! expect_opn {
                     return Err(Error::other(format!("expected '(' or operator, found '{}'", t)));
                 }
-                opns.push(Expr::Variable(ident));
+                opns.push(ExprAst::Variable(ident));
                 expect_opn = false;
                 continue;
             }
@@ -242,7 +256,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expr> {
+    pub fn parse(&mut self) -> Result<ExprAst> {
         self.parse_expr(true, &[])
     }
 }

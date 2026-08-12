@@ -33,8 +33,8 @@ pub struct GraphSource {
 }
 
 impl GraphSource {
-    fn expression(text: String) -> Result<Self> {
-        let expr = expr::Expr::parse(&text).map_err(|e| {
+    fn expression(text: String, expr_env: &expr::Environment) -> Result<Self> {
+        let expr = expr::Expr::parse(&text, expr_env).map_err(|e| {
             Error::other(format!("ERROR parsing expression '{}': {}", text, e))
         })?;
         Ok(GraphSource {
@@ -75,7 +75,7 @@ impl GraphSource {
     }
 }
 
-fn read_cmdline_options() -> Result<Vec<GraphSource>> {
+fn read_cmdline_options(expr_env: &expr::Environment) -> Result<Vec<GraphSource>> {
     let mut sources = Vec::new();
 
     let argv = std::env::args_os().skip(1).collect::<Vec<_>>();
@@ -95,7 +95,7 @@ fn read_cmdline_options() -> Result<Vec<GraphSource>> {
         if arg == "-e" {
             argn += 1;
             if let Some(expr) = argv.get(argn) {
-                sources.push(GraphSource::expression(expr.to_string_lossy().to_string())?);
+                sources.push(GraphSource::expression(expr.to_string_lossy().to_string(), expr_env)?);
             } else {
                 println!("ERROR: option '-e' requires expression");
                 std::process::exit(1);
@@ -133,14 +133,15 @@ fn read_cmdline_options() -> Result<Vec<GraphSource>> {
     }
 
     if sources.is_empty() {
-        sources.push(GraphSource::expression(String::from("sin(x)"))?);
+        sources.push(GraphSource::expression(String::from("sin(x)"), expr_env)?);
     }
     Ok(sources)
 }
 
 pub fn main() {
-    let graphs = match read_cmdline_options() {
-        Ok(g) => { g }
+    let expr_env = expr::Environment::new().with_math_functions().with_math_constants().with_var("x", 0.0);
+    let sources = match read_cmdline_options(&expr_env) {
+        Ok(s) => { s }
         Err(e) => {
             println!("{}", e);
             return;
@@ -163,7 +164,7 @@ pub fn main() {
         Err(e) => { println!("ERROR loading font: {}", e); return; }
     };
 
-    let mut window = window::Window::new(FONT_SIZE as f32, graphs);
+    let mut window = window::Window::new(FONT_SIZE as f32, sources, expr_env);
 
     while ! rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);

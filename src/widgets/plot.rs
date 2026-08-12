@@ -1,7 +1,6 @@
 use raylib::prelude::*;
 
-use crate::expr::Expr;
-use crate::expr::eval::ExprEvaluator;
+use crate::expr;
 use crate::data;
 
 use super::{
@@ -190,7 +189,7 @@ impl PlotWidget {
         );
     }
 
-    pub fn draw_expr(&self, d: &mut RaylibDrawHandle<'_>, expr: &Expr, eval: &mut ExprEvaluator, color: Color) {
+    pub fn draw_expr(&self, d: &mut RaylibDrawHandle<'_>, expr: &expr::Expr, expr_env: &mut expr::Environment, color: Color) {
         d.draw_scissor_mode(
             self.rect.x.floor() as i32,
             self.rect.y.floor() as i32,
@@ -204,8 +203,8 @@ impl PlotWidget {
                 let mut last_y = 0.0;
                 for i in 0..n_samples {
                     let x = self.min_x + i as f64 * x_step;
-                    eval.set_var("x", x);
-                    let y = eval.eval(expr);
+                    expr_env.set_var("x", x);
+                    let y = expr.evaluate(expr_env);
 
                     let (px, py) = tr.graph_to_window(x, y);
                     if i > 0 && (py - last_y).abs() < self.rect.height {
